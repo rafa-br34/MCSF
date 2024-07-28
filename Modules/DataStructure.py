@@ -1,4 +1,5 @@
 import requests
+import pickle
 import time
 
 class HostList:
@@ -30,6 +31,14 @@ class HostList:
 	def deserialize(self, obj):
 		self.hosts = [Host().deserialize(host) for host in obj["hosts"]]
 		return self
+	
+	def serialize_file(self, filename):
+		with open(filename, "wb") as file:
+			pickle.dump(self.serialize(), file)
+	
+	def deserialize_file(self, filename):
+		with open(filename, "rb") as file:
+			self.deserialize(pickle.load(file))
 
 class Host:
 	def __init__(self, address=None):
@@ -68,6 +77,13 @@ class Server:
 		self.active_players = 0
 		self.server_version = None
 		self.protocol_version = None
+
+	def parse_status(self, obj):
+		if "version" in obj:
+			self.parse_version(obj["version"])
+
+		if "players" in obj:
+			self.parse_players(obj["players"])
 	
 	def parse_version(self, obj):
 		self.server_version = obj["name"]
@@ -130,17 +146,20 @@ class Player:
 		self.uuid = obj["id"]
 
 	def verify_premium(self):
-		result = requests.get(f"https://sessionserver.mojang.com/session/minecraft/profile/{self.uuid}")
-		if result.status_code == 200:
-			self.premium_uuid = True
-		else:
-			self.premium_uuid = False
-		
-		result = requests.get(f"https://api.mojang.com/users/profiles/minecraft/{self.name}")
-		if result.status_code == 200:
-			self.premium_name = True
-		else:
-			self.premium_name = False
+		try:
+			result = requests.get(f"https://sessionserver.mojang.com/session/minecraft/profile/{self.uuid}")
+			if result.status_code == 200:
+				self.premium_uuid = True
+			else:
+				self.premium_uuid = False
+			
+			result = requests.get(f"https://api.mojang.com/users/profiles/minecraft/{self.name}")
+			if result.status_code == 200:
+				self.premium_name = True
+			else:
+				self.premium_name = False
+		except OSError:
+			return
 		
 		self.last_verified = time.time()
 	
