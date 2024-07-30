@@ -25,6 +25,14 @@ class HostList:
 			for server in host.servers:
 				yield server
 
+	def server_count(self):
+		server_count = 0
+		
+		for host in self.hosts:
+			server_count += len(host.servers)
+
+		return server_count
+
 	def serialize(self):
 		return {
 			"hosts": [host.serialize() for host in self.hosts]
@@ -96,10 +104,15 @@ class Server:
 		self.max_players = obj["max"]
 
 		if "sample" in obj:
+			for player in self.players:
+				player.active = False
+
 			for player_sample in obj["sample"]:
 				player = self.get_or_add_player(player_sample["name"], player_sample["id"])
 				player.parse_sample(player_sample)
 				player.update_last_seen()
+				player.active = True
+
 
 	def get_or_add_player(self, name=None, uuid=None):
 		player = next((player for player in self.players if player.name == name or player.uuid == uuid), None)
@@ -138,6 +151,7 @@ class Player:
 		self.server = server
 		self.name = name
 		self.uuid = uuid
+		self.active = False
 		self.last_seen = 0
 		self.last_verified = 0
 		self.premium_uuid = None
@@ -173,6 +187,7 @@ class Player:
 		return {
 			"name": self.name,
 			"uuid": self.uuid,
+			"active": self.active,
 			"premium_uuid": self.premium_uuid,
 			"premium_name": self.premium_name,
 			"last_seen": self.last_seen,
@@ -184,6 +199,7 @@ class Player:
 		self.last_seen = obj["last_seen"]
 		self.premium_name = obj["premium_uuid"]
 		self.premium_uuid = obj["premium_uuid"]
+		self.active = obj["active"]
 		self.uuid = obj["uuid"]
 		self.name = obj["name"]
 		return self

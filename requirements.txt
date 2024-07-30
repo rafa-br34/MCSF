@@ -4,4 +4,5 @@ untangle
 icmplib
 mcproto
 aiohttp
+arrow
 tqdm

@@ -6,10 +6,15 @@ class Color:
 		self.background = background
 		self.modifiers = modifiers
 		self.pair_key = pair_key
-		curses.init_pair(pair_key, foreground, background)
+		
+		if foreground and background:
+			self.pair = True
+			curses.init_pair(pair_key, foreground, background)
+		else:
+			self.pair = False
 	
 	def get(self):
-		return curses.color_pair(self.pair_key) | self.modifiers
+		return (self.pair and curses.color_pair(self.pair_key) or 0) | self.modifiers
 	
 	def __hash__(self):
 		return hash(hash(self.foreground) + hash(self.background) + hash(self.modifiers))
@@ -55,7 +60,6 @@ class ScrollingFrame:
 		elif cursor > nsy:
 			scroll += cursor - nsy
 			cursor = nsy
-		
 		
 		scroll = min(item_count - 1 - nsy, scroll)
 		scroll = max(0, scroll)

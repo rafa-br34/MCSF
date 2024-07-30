@@ -3,6 +3,8 @@ import asyncio
 import pathlib
 import atexit
 import curses
+import arrow
+import json
 import time
 
 from Modules import DataStructure
@@ -11,7 +13,7 @@ from Modules import Widgets
 
 
 c_save_file = "save_state.pickle"
-c_ping_workers = 12
+c_ping_workers = 16
 
 class _State:
 	host_list = DataStructure.HostList()
@@ -38,10 +40,11 @@ async def scheduler():
 	while g_state.running:
 		if queue.empty():
 			save_state()
+			await asyncio.sleep(2.5)
 			for server in host_list.server_iterator():
 				await queue.put(server)
 
-		await asyncio.sleep(2.5)
+		await asyncio.sleep(0.5)
 
 async def ping_worker():
 	global g_state
@@ -55,13 +58,14 @@ async def ping_worker():
 			server.parse_status(result)
 		else:
 			server.active = False
+			server.active_players = 0
 		
 		for player in server.players:
 			if time.time() - player.last_verified > 216000 * 12:
 				await player.verify_premium_async()
 
 
-def spin_string(string, size, rotation, spacing=4):
+def spin_text(string, size, rotation, spacing=4):
 	strlen = len(string)
 	
 	if strlen <= size:
@@ -73,6 +77,46 @@ def spin_string(string, size, rotation, spacing=4):
 		return string[rotation:rotation + size] + ' ' * (spacing + min(0, size - remainder)) + string[0:remainder - spacing]
 	else:
 		return string[rotation:rotation + size]
+
+def spin_textr(string, size, rotation, spacing=4):
+	return spin_text(string, size, rotation, spacing).rjust(size)
+
+def spin_textl(string, size, rotation, spacing=4):
+	return spin_text(string, size, rotation, spacing).ljust(size)
+
+
+class ServerProperty:
+	def __init__(self, item_type, source_object):
+		self.source_object = source_object
+		self.item_type = item_type
+
+	def draw(self, line, screen, palette):
+		source = self.source_object
+
+		match self.item_type:
+			case "TEXT":
+				screen.addstr(line, 0, source)
+			
+			case "PLAYER":
+				screen.addstr(
+					line, 0,
+					source.active and "[ONLINE]" or "[OFFLINE]",
+					source.active and palette.get("ONL") or palette.get("OFF")
+				)
+				screen.addstr(
+					line, 12,
+					f"{source.name} ({source.uuid}) Premium name/uuid: {source.premium_name}/{source.premium_uuid} Last seen {arrow.get(source.last_seen).humanize()}"
+				)
+	
+	def copy(self):
+		source = self.source_object
+
+		match self.item_type:
+			case "TEXT":
+				return source
+
+			case "PLAYER":
+				return json.dumps(source.serialize(), indent=3)
 
 
 async def main(screen: curses.window):
@@ -100,9 +144,11 @@ async def main(screen: curses.window):
 	if curses.can_change_color():
 		curses.init_color(curses.COLOR_WHITE, 800, 800, 800)
 
-	palette.set("CMD", curses.COLOR_WHITE, curses.COLOR_CYAN)
-	palette.set("SEL", curses.COLOR_WHITE, curses.COLOR_GREEN)
-	palette.set("HOV", curses.COLOR_WHITE, curses.COLOR_BLACK, curses.A_BLINK)
+	palette.set("CMD", curses.COLOR_WHITE, curses.COLOR_CYAN) # Bottom bar
+	palette.set("HOV", None, None, curses.A_BLINK) # Item hovered
+
+	palette.set("ONL", curses.COLOR_WHITE, curses.COLOR_GREEN) # Online
+	palette.set("OFF", curses.COLOR_WHITE, curses.COLOR_RED) # Offline
 	
 	scrolling_frame_states = []
 	scrolling_frame = Widgets.ScrollingFrame(screen.subwin(curses.LINES - 1, -1, 0, 0))
@@ -118,23 +164,26 @@ async def main(screen: curses.window):
 		address = server.host.address
 		port = server.port
 
-		players = f"{server.active_players}/{server.max_players}({len(server.players)})"
-		version = f"{spin_string(server.server_version or '?', 12, tick):<12}"
-		active = server.active and ' ' or '▼'
-		host = f"{spin_string(address + ':' + str(port), 21, tick):<21}"
+		string = "{} {} {} {}/{}({})".format(
+			spin_textl(address + ':' + str(port), 28, tick),
+			spin_textl(server.server_version or '?', 16, tick),
+			server.active and ' ' or '▼',
+			server.active_players, server.max_players, len(server.players)
+		)
 
-		screen.addstr(line, 0, f"{host} {version} {active} {players}")
+		screen.addstr(line, 0, string)
 		if hover:
 			screen.chgat(line, 0, -1, palette.get("HOV"))
-	
+
 	def server_info(server):
 		player_list = []
+
 		for player in server.players:
-			player_list.append(f"\t{player.name} ({player.uuid}) Premium name/uuid: {player.premium_name}/{player.premium_uuid}")
+			player_list.append(ServerProperty("PLAYER", player))
 
 		return [
-			f"Version: {server.server_version or '?'}",
-			f"Active players {server.active_players}/{server.max_players}",
+			ServerProperty("TEXT", f"Version: {server.server_version or '?'}"),
+			ServerProperty("TEXT", f"Active players {server.active_players}/{server.max_players}"),
 			*player_list,
 		]
 
@@ -171,11 +220,14 @@ async def main(screen: curses.window):
 					scrolling_frame_states.append(scrolling_frame.get_state())
 					scrolling_frame.set_position(0, 0)
 					server_view = selection
-					
 			
 			case _ if key == ord('C') or key == ord('c'):
 				if server_view and selection != None:
-					pyperclip.copy(str(selection))
+					pyperclip.copy(selection.copy())
+			
+			case _ if key == ord('Q') or key == ord('q'):
+				if not server_view:
+					g_state.running = False
 
 		# Draw start
 		screen.clear()
@@ -184,7 +236,8 @@ async def main(screen: curses.window):
 			scrolling_frame.update()
 
 			for _idx, rel, item in scrolling_frame.iterate():
-				screen.addstr(rel, 0, item)
+				item.draw(rel, screen, palette)
+
 				if rel == scrolling_frame.cursor:
 					screen.chgat(rel, 0, -1, palette.get("HOV"))
 			
@@ -199,7 +252,7 @@ async def main(screen: curses.window):
 			for _idx, rel, server in scrolling_frame.iterate():
 				draw_server(rel, server, tick, rel == scrolling_frame.cursor)
 			
-			set_status("ESC: Options, ↑/↓ & PAGE-UP/PAGE-DOWN: Move up/down, V: View server info")
+			set_status("ESC: Options, ↑/↓ & PAGE-UP/PAGE-DOWN: Move up/down, V: View server info, Q: Quit")
 		
 		screen.refresh()
 
