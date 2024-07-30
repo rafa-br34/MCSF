@@ -86,85 +86,13 @@ def spin_textr(string, size, rotation, spacing=4):
 def spin_textl(string, size, rotation, spacing=4):
 	return spin_text(string, size, rotation, spacing).ljust(size)
 
-
-class Property:
-	def __init__(self, item_type, item):
-		self.item_type = item_type
-		self.item = item
-
-	def draw(self, line, tick, screen, palette):
-		item = self.item
-
-		match self.item_type:
-			case "TEXT":
-				screen.addstr(line, 0, item)
-			
-			case "SERVER":
-				address = item.host.address
-				port = item.port
-
-				version = spin_textl(item.server_version or '?', 20, tick)
-				host    = spin_textl(address + ':' + str(port),  26, tick) # IPv4 len: 21
-				mods    = spin_textl(f"{len(item.mods)} Mods",   9,  tick)
-
-				players = f"{item.active_players}/{item.max_players}({len(item.players)})"
-				
-				screen.addstr(
-					line, 0,
-					item.active and "[ACTIVE]" or "[INACTIVE]",
-					item.active and palette.get("ONL") or palette.get("OFF")
-				)
-				screen.addstr(
-					line, 11,
-					f"{host} {version} {mods} {players}"
-				)
-			
-			case "PLAYER":
-				screen.addstr(
-					line, 0,
-					item.active and "[ONLINE]" or "[OFFLINE]",
-					item.active and palette.get("ONL") or palette.get("OFF")
-				)
-				screen.addstr(
-					line, 11,
-					f"{item.name} ({item.uuid}) Premium name/uuid: {item.premium_name}/{item.premium_uuid} Last seen {arrow.get(item.last_seen).humanize()}"
-				)
-			
-			case "MOD":
-				screen.addstr(
-					line, 3,
-					f"{item.id} ({item.version})"
-				)
-	
-	def copy(self):
-		item_type = self.item_type
-		source = self.item
-
-		match item_type:
-			case "TEXT":
-				return source
-
-			case _ if item_type in ["SERVER", "PLAYER", "MOD"]:
-				return json.dumps(source.serialize(), indent=3)
-
-def build_server_info(server):
-	player_list = []
-	mod_list = []
-
-	for player in server.players:
-		player_list.append(Property("PLAYER", player))
-
-	for mod in server.mods:
-		mod_list.append(Property("MOD", mod))
-
-	return [
-		Property("TEXT", f"Version: {server.server_version or '?'}"),
-		Property("TEXT", f"Enforces secure chat: {server.secure_chat and 'Yes' or 'No'}"),
-		Property("TEXT", f"Active players {server.active_players}/{server.max_players} ({len(server.players)} players seen):"),
-		*player_list,
-		Property("TEXT", f"Mods {len(server.mods)}:"),
-		*mod_list
-	]
+def bool_to_word(value):
+	if value == True:
+		return "Yes"
+	elif value == False:
+		return "No"
+	else:
+		return '?'
 
 def parse_arguments():
 	parser = argparse.ArgumentParser(description="A simple text-based user interface tool to track specific Minecraft servers")
@@ -207,6 +135,93 @@ def prepare_screen(screen):
 	if curses.can_change_color():
 		curses.init_color(curses.COLOR_WHITE, 800, 800, 800)
 
+class Property:
+	def __init__(self, item_type, item):
+		self.item_type = item_type
+		self.item = item
+
+	def draw(self, line, tick, screen, palette):
+		item = self.item
+
+		match self.item_type:
+			case "TEXT":
+				screen.addstr(line, 0, item)
+			
+			case "SERVER":
+				address = item.host.address
+				port = item.port
+
+				version = spin_textl(item.server_version or '?', 20, tick)
+				host    = spin_textl(address + ':' + str(port),  26, tick) # IPv4 len: 21
+				mods    = spin_textl(f"{len(item.mods)} Mods",   9,  tick)
+
+				players = f"{item.active_players}/{item.max_players}({len(item.players)})"
+				
+				screen.addstr(
+					line, 0,
+					item.active and "[ACTIVE]" or "[INACTIVE]",
+					item.active and palette.get("ONL") or palette.get("OFF")
+				)
+				screen.addstr(
+					line, 11,
+					f"{host} {version} {mods} {players}"
+				)
+
+			case "PLAYER_LIST":
+				screen.addstr(line, 0, f"Players {item.active_players}/{item.max_players} ({len(item.players)} players seen):")
+			
+			case "PLAYER":
+				screen.addstr(
+					line, 0,
+					item.active and "[ONLINE]" or "[OFFLINE]",
+					item.active and palette.get("ONL") or palette.get("OFF")
+				)
+				screen.addstr(
+					line, 11,
+					f"{item.name} ({item.uuid}) Premium name/uuid: {bool_to_word(item.premium_name)}/{bool_to_word(item.premium_uuid)} Last seen {arrow.get(item.last_seen).humanize()}"
+				)
+			
+			case "MOD_LIST":
+				screen.addstr(line, 0, f"Mods {len(item.mods)}:")
+
+			case "MOD":
+				screen.addstr(line, 3, f"{item.id} ({item.version})")
+	
+	def text(self):
+		item_type = self.item_type
+		source = self.item
+
+		match item_type:
+			case "TEXT":
+				return source
+			
+			case "PLAYER_LIST":
+				return json.dumps([player.serialize() for player in source.players], indent=3)
+			
+			case "MOD_LIST":
+				return json.dumps([mod.serialize() for mod in source.mods], indent=3)
+
+			case _ if item_type in ["SERVER", "PLAYER", "MOD"]:
+				return json.dumps(source.serialize(), indent=3)
+
+def build_server_info(server):
+	player_list = []
+	mod_list = []
+
+	for player in server.players:
+		player_list.append(Property("PLAYER", player))
+
+	for mod in server.mods:
+		mod_list.append(Property("MOD", mod))
+
+	return [
+		Property("TEXT", f"Version: {server.server_version or '?'}"),
+		Property("TEXT", f"Enforces secure chat: {bool_to_word(server.secure_chat)}"),
+		Property("PLAYER_LIST", server),
+		*player_list,
+		Property("MOD_LIST", server),
+		*mod_list
+	]
 
 async def main(screen: curses.window):
 	global g_state
@@ -268,7 +283,7 @@ async def main(screen: curses.window):
 			
 			case _ if key == ord('C') or key == ord('c'):
 				if selection != None:
-					pyperclip.copy(selection.copy())
+					pyperclip.copy(selection.text())
 			
 			case _ if key == ord('Q') or key == ord('q'):
 				g_state.running = False

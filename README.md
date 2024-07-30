@@ -96,5 +96,6 @@ Optional argument that defines if Nmap should be used for the SYN scan.
 Default value is `False`  
 
 #### `--nmap-path`:
+
 Optional argument that defines the path in which Nmap is located.  
 Default value is `nmap`
