@@ -13,10 +13,10 @@ from tqdm import tqdm
 from Modules import DataStructure
 from Modules import Protocol
 
-c_randomize_ports = True
-c_randomize_hosts = True
+c_randomize_ports = False
+c_randomize_hosts = False
 c_ping_scan_runners = 16
-c_ping_scan = True
+c_ping_scan = False
 c_nmap_path = "nmap"
 c_use_nmap = False
 c_runners = 32

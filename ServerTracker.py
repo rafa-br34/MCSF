@@ -1,4 +1,5 @@
 import pyperclip
+import argparse
 import asyncio
 import pathlib
 import atexit
@@ -12,11 +13,12 @@ from Modules import Protocol
 from Modules import Widgets
 
 
-c_save_file = "save_state.pickle"
-c_ping_workers = 16
+c_state_file = "save_state.pickle"
+c_runners = 16
 
 class _State:
 	host_list = DataStructure.HostList()
+	arguments = None
 	running = True
 	queue = asyncio.Queue()
 
@@ -24,11 +26,11 @@ g_state = _State()
 
 def load_state():
 	global g_state
-	g_state.host_list.deserialize_file(c_save_file)
+	g_state.host_list.deserialize_file(g_state.arguments.state_file)
 
 def save_state():
 	global g_state
-	g_state.host_list.serialize_file(c_save_file)
+	g_state.host_list.serialize_file(g_state.arguments.state_file)
 
 
 async def scheduler():
@@ -145,40 +147,83 @@ class Property:
 			case _ if item_type in ["SERVER", "PLAYER", "MOD"]:
 				return json.dumps(source.serialize(), indent=3)
 
+def build_server_info(server):
+	player_list = []
+	mod_list = []
 
-async def main(screen: curses.window):
+	for player in server.players:
+		player_list.append(Property("PLAYER", player))
+
+	for mod in server.mods:
+		mod_list.append(Property("MOD", mod))
+
+	return [
+		Property("TEXT", f"Version: {server.server_version or '?'}"),
+		Property("TEXT", f"Enforces secure chat: {server.secure_chat and 'Yes' or 'No'}"),
+		Property("TEXT", f"Active players {server.active_players}/{server.max_players} ({len(server.players)} players seen):"),
+		*player_list,
+		Property("TEXT", f"Mods {len(server.mods)}:"),
+		*mod_list
+	]
+
+def parse_arguments():
+	parser = argparse.ArgumentParser(description="A simple text-based user interface tool to track specific Minecraft servers")
+
+	parser.add_argument(
+		"--state-file", "-s", help=f"The path in which the state file should be stored (defaults to \"{c_state_file}\").", required=False, type=str,
+		default=c_state_file
+	)
+
+	parser.add_argument(
+		"--runners", "-r", help=f"Task count (defaults to {c_runners}).", required=False, type=int,
+		default=c_runners
+	)
+
+	return parser.parse_args()
+
+def prepare_state():
 	global g_state
+	g_state.arguments = parse_arguments()
 
-
-	if pathlib.Path(c_save_file).exists():
+	if pathlib.Path(g_state.arguments.state_file).exists():
 		load_state()
 	
 	atexit.register(save_state)
 
 	asyncio.create_task(scheduler())
-	for _ in range(c_ping_workers):
+	for _ in range(g_state.arguments.runners):
 		asyncio.create_task(ping_worker())
+	
 
-
+def prepare_screen(screen):
 	curses.mousemask(curses.ALL_MOUSE_EVENTS)
 	curses.curs_set(0)
 	screen.clear()
 	screen.nodelay(True)
 	screen.keypad(True)
-
-	palette = Widgets.Palette()
+	screen.idcok(False)
+	screen.idlok(False)
 
 	if curses.can_change_color():
 		curses.init_color(curses.COLOR_WHITE, 800, 800, 800)
 
+
+async def main(screen: curses.window):
+	global g_state
+
+	prepare_state()
+	prepare_screen(screen)
+
+	palette = Widgets.Palette()
+
 	palette.set("CMD", curses.COLOR_WHITE, curses.COLOR_CYAN) # Bottom bar
-	palette.set("HOV", None, None, curses.A_BLINK) # Item hovered
+	palette.set("HOV", None, None, curses.A_BOLD) # Item hovered
 
 	palette.set("ONL", curses.COLOR_WHITE, curses.COLOR_GREEN) # Online
 	palette.set("OFF", curses.COLOR_WHITE, curses.COLOR_RED) # Offline
 	
 	scrolling_frame_states = []
-	scrolling_frame = Widgets.ScrollingFrame(screen.subwin(curses.LINES - 1, -1, 0, 0))
+	scrolling_frame = Widgets.ScrollingFrame(screen.subwin(curses.LINES - 1, curses.COLS - 1, 0, 0))
 	server_view = None
 	start = time.time()
 	tick = 0
@@ -187,32 +232,13 @@ async def main(screen: curses.window):
 		screen.addstr(curses.LINES - 1, 0, string)
 		screen.chgat(curses.LINES - 1, 0, -1, palette.get("CMD"))
 
-	def server_info(server):
-		player_list = []
-		mod_list = []
-
-		for player in server.players:
-			player_list.append(Property("PLAYER", player))
-
-		for mod in server.mods:
-			mod_list.append(Property("MOD", mod))
-
-		return [
-			Property("TEXT", f"Version: {server.server_version or '?'}"),
-			Property("TEXT", f"Enforces secure chat: {server.secure_chat and "Yes" or "No"}"),
-			Property("TEXT", f"Active players {server.active_players}/{server.max_players} ({len(server.players)} players seen):"),
-			*player_list,
-			Property("TEXT", f"Mods {len(server.mods)}:"),
-			*mod_list
-		]
-
 	while g_state.running:
 		key = screen.getch()
 
 		if 0 > key:
 			await asyncio.sleep(0.05)
 		
-		delta = (time.time() - start) - 0.25
+		delta = (time.time() - start) - 0.20
 		if delta > 0:
 			tick += 1
 			start = time.time() - delta
@@ -248,9 +274,9 @@ async def main(screen: curses.window):
 				g_state.running = False
 
 		# Draw start
-		screen.clear()
+		screen.erase()
 		if server_view:
-			scrolling_frame.items = server_info(server_view)
+			scrolling_frame.items = build_server_info(server_view)
 		else:
 			servers = list(g_state.host_list.server_iterator())
 			servers.sort(key = lambda server: server.active and len(server.players), reverse=True)
