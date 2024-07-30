@@ -85,37 +85,64 @@ def spin_textl(string, size, rotation, spacing=4):
 	return spin_text(string, size, rotation, spacing).ljust(size)
 
 
-class ServerProperty:
-	def __init__(self, item_type, source_object):
-		self.source_object = source_object
+class Property:
+	def __init__(self, item_type, item):
 		self.item_type = item_type
+		self.item = item
 
-	def draw(self, line, screen, palette):
-		source = self.source_object
+	def draw(self, line, tick, screen, palette):
+		item = self.item
 
 		match self.item_type:
 			case "TEXT":
-				screen.addstr(line, 0, source)
+				screen.addstr(line, 0, item)
+			
+			case "SERVER":
+				address = item.host.address
+				port = item.port
+
+				version = spin_textl(item.server_version or '?', 20, tick)
+				host    = spin_textl(address + ':' + str(port),  26, tick) # IPv4 len: 21
+				mods    = spin_textl(f"{len(item.mods)} Mods",   9,  tick)
+
+				players = f"{item.active_players}/{item.max_players}({len(item.players)})"
+				
+				screen.addstr(
+					line, 0,
+					item.active and "[ACTIVE]" or "[INACTIVE]",
+					item.active and palette.get("ONL") or palette.get("OFF")
+				)
+				screen.addstr(
+					line, 11,
+					f"{host} {version} {mods} {players}"
+				)
 			
 			case "PLAYER":
 				screen.addstr(
 					line, 0,
-					source.active and "[ONLINE]" or "[OFFLINE]",
-					source.active and palette.get("ONL") or palette.get("OFF")
+					item.active and "[ONLINE]" or "[OFFLINE]",
+					item.active and palette.get("ONL") or palette.get("OFF")
 				)
 				screen.addstr(
-					line, 12,
-					f"{source.name} ({source.uuid}) Premium name/uuid: {source.premium_name}/{source.premium_uuid} Last seen {arrow.get(source.last_seen).humanize()}"
+					line, 11,
+					f"{item.name} ({item.uuid}) Premium name/uuid: {item.premium_name}/{item.premium_uuid} Last seen {arrow.get(item.last_seen).humanize()}"
+				)
+			
+			case "MOD":
+				screen.addstr(
+					line, 3,
+					f"{item.id} ({item.version})"
 				)
 	
 	def copy(self):
-		source = self.source_object
+		item_type = self.item_type
+		source = self.item
 
-		match self.item_type:
+		match item_type:
 			case "TEXT":
 				return source
 
-			case "PLAYER":
+			case _ if item_type in ["SERVER", "PLAYER", "MOD"]:
 				return json.dumps(source.serialize(), indent=3)
 
 
@@ -160,31 +187,23 @@ async def main(screen: curses.window):
 		screen.addstr(curses.LINES - 1, 0, string)
 		screen.chgat(curses.LINES - 1, 0, -1, palette.get("CMD"))
 
-	def draw_server(line, server, tick, hover):
-		address = server.host.address
-		port = server.port
-
-		string = "{} {} {} {}/{}({})".format(
-			spin_textl(address + ':' + str(port), 28, tick),
-			spin_textl(server.server_version or '?', 16, tick),
-			server.active and ' ' or '▼',
-			server.active_players, server.max_players, len(server.players)
-		)
-
-		screen.addstr(line, 0, string)
-		if hover:
-			screen.chgat(line, 0, -1, palette.get("HOV"))
-
 	def server_info(server):
 		player_list = []
+		mod_list = []
 
 		for player in server.players:
-			player_list.append(ServerProperty("PLAYER", player))
+			player_list.append(Property("PLAYER", player))
+
+		for mod in server.mods:
+			mod_list.append(Property("MOD", mod))
 
 		return [
-			ServerProperty("TEXT", f"Version: {server.server_version or '?'}"),
-			ServerProperty("TEXT", f"Active players {server.active_players}/{server.max_players}"),
+			Property("TEXT", f"Version: {server.server_version or '?'}"),
+			Property("TEXT", f"Enforces secure chat: {server.secure_chat and "Yes" or "No"}"),
+			Property("TEXT", f"Active players {server.active_players}/{server.max_players} ({len(server.players)} players seen):"),
 			*player_list,
+			Property("TEXT", f"Mods {len(server.mods)}:"),
+			*mod_list
 		]
 
 	while g_state.running:
@@ -216,44 +235,36 @@ async def main(screen: curses.window):
 				if server_view:
 					scrolling_frame.set_state(scrolling_frame_states.pop())
 					server_view = None
-				else:
+				elif selection:
 					scrolling_frame_states.append(scrolling_frame.get_state())
 					scrolling_frame.set_position(0, 0)
-					server_view = selection
+					server_view = selection.item
 			
 			case _ if key == ord('C') or key == ord('c'):
-				if server_view and selection != None:
+				if selection != None:
 					pyperclip.copy(selection.copy())
 			
 			case _ if key == ord('Q') or key == ord('q'):
-				if not server_view:
-					g_state.running = False
+				g_state.running = False
 
 		# Draw start
 		screen.clear()
 		if server_view:
 			scrolling_frame.items = server_info(server_view)
-			scrolling_frame.update()
-
-			for _idx, rel, item in scrolling_frame.iterate():
-				item.draw(rel, screen, palette)
-
-				if rel == scrolling_frame.cursor:
-					screen.chgat(rel, 0, -1, palette.get("HOV"))
-			
-			set_status("↑/↓ & PAGE-UP/PAGE-DOWN: Move up/down, C: Copy field, V: Exit server info")
 		else:
 			servers = list(g_state.host_list.server_iterator())
 			servers.sort(key = lambda server: server.active and len(server.players), reverse=True)
 
-			scrolling_frame.items = servers
-			scrolling_frame.update()
+			scrolling_frame.items = list(map(lambda srv: Property("SERVER", srv), servers))
 
-			for _idx, rel, server in scrolling_frame.iterate():
-				draw_server(rel, server, tick, rel == scrolling_frame.cursor)
-			
-			set_status("ESC: Options, ↑/↓ & PAGE-UP/PAGE-DOWN: Move up/down, V: View server info, Q: Quit")
-		
+		scrolling_frame.update()
+		for _idx, rel, item in scrolling_frame.iterate():
+			item.draw(rel, tick, screen, palette)
+
+			if rel == scrolling_frame.cursor:
+				screen.chgat(rel, 0, -1, palette.get("HOV"))
+
+		set_status("↑/↓ & PAGE-UP/PAGE-DOWN: Move up/down, C: Copy field, V: Toggle server info view, Q: Quit")
 		screen.refresh()
 
 
