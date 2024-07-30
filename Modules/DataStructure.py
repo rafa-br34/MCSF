@@ -57,14 +57,20 @@ class Host:
 		self.address = address
 		self.servers = []
 
+	def get_server(self, port):
+		return next((server for server in self.servers if server.port == port), None)
+
 	def get_or_add_server(self, port):
-		server = next((server for server in self.servers if server.port == port), None)
+		server = self.get_server(port)
 		
 		if not server:
 			server = Server(self, port)
 			self.servers.append(server)
 		
 		return server
+	
+	def remove_server(self, port):
+		self.servers.remove(self.get_server(port))
 
 	def serialize(self):
 		return {
@@ -141,15 +147,20 @@ class Server:
 				player.update_last_seen()
 				player.active = True
 
+	def get_player(self, name=None, uuid=None):
+		return next((player for player in self.players if player.name == name or player.uuid == uuid), None)
 
 	def get_or_add_player(self, name=None, uuid=None):
-		player = next((player for player in self.players if player.name == name or player.uuid == uuid), None)
+		player = self.get_player(name, uuid)
 
 		if not player:
 			player = Player(self, name, uuid)
 			self.players.append(player)
 
 		return player
+	
+	def remove_player(self, name=None, uuid=None):
+		self.players.remove(self.get_player(name, uuid))
 
 	def serialize(self):
 		return {

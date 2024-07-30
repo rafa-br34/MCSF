@@ -247,6 +247,17 @@ async def interface(screen: curses.window):
 			case curses.KEY_NPAGE:
 				scroll_frame.cursor += scroll_frame.size_y - 1
 			
+			case curses.KEY_DC:
+				if selection:
+					item = selection.item
+					if isinstance(item, DataStructure.Server):
+						item.host.remove_server(item.port)
+					elif isinstance(item, DataStructure.Player):
+						item.server.remove_player(item.name, item.uuid)
+			
+			case curses.KEY_IC:
+				pass # @todo Insert item
+			
 			case _ if key == ord('V') or key == ord('v'):
 				if server_view:
 					scroll_frame.set_state(scroll_frame_states.pop())
@@ -285,7 +296,7 @@ async def interface(screen: curses.window):
 			if rel == scroll_frame.cursor:
 				screen.chgat(rel, 0, -1, palette.get("HOV"))
 
-		set_status("↑/↓ & PAGE-UP/PAGE-DOWN: Move up/down, C: Copy field, V: Toggle server info view, Q: Quit")
+		set_status("↑/↓ & PAGE-UP/PAGE-DOWN: Move up/down, C: Copy field, V: Toggle server info view, Q: Quit, DELETE: Delete item, INSERT: Insert item")
 		screen.refresh()
 
 def parse_arguments():
