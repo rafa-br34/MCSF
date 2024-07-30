@@ -1,4 +1,6 @@
 import requests
+import aiohttp
+import asyncio
 import pickle
 import time
 
@@ -147,17 +149,18 @@ class Player:
 
 	def verify_premium(self):
 		try:
-			result = requests.get(f"https://sessionserver.mojang.com/session/minecraft/profile/{self.uuid}")
-			if result.status_code == 200:
-				self.premium_uuid = True
-			else:
-				self.premium_uuid = False
-			
-			result = requests.get(f"https://api.mojang.com/users/profiles/minecraft/{self.name}")
-			if result.status_code == 200:
-				self.premium_name = True
-			else:
-				self.premium_name = False
+			self.premium_uuid = requests.get(f"https://sessionserver.mojang.com/session/minecraft/profile/{self.uuid}").status_code
+			self.premium_name = requests.get(f"https://api.mojang.com/users/profiles/minecraft/{self.name}").status_code
+		except OSError:
+			return
+		
+		self.last_verified = time.time()
+	
+	async def verify_premium_async(self):
+		try:
+			async with aiohttp.ClientSession() as session:
+				self.premium_uuid = (await session.get(f"https://sessionserver.mojang.com/session/minecraft/profile/{self.uuid}")).status == 200
+				self.premium_name = (await session.get(f"https://api.mojang.com/users/profiles/minecraft/{self.name}")).status == 200
 		except OSError:
 			return
 		

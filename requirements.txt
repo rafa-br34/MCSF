@@ -1,4 +1,7 @@
+windows-curses; platform_system == "Windows"
+pyperclip
 untangle
 icmplib
 mcproto
+aiohttp
 tqdm
