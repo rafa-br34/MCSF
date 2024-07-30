@@ -94,47 +94,6 @@ def bool_to_word(value):
 	else:
 		return '?'
 
-def parse_arguments():
-	parser = argparse.ArgumentParser(description="A simple text-based user interface tool to track specific Minecraft servers")
-
-	parser.add_argument(
-		"--state-file", "-s", help=f"The path in which the state file should be stored (defaults to \"{c_state_file}\").", required=False, type=str,
-		default=c_state_file
-	)
-
-	parser.add_argument(
-		"--runners", "-r", help=f"Task count (defaults to {c_runners}).", required=False, type=int,
-		default=c_runners
-	)
-
-	return parser.parse_args()
-
-def prepare_state():
-	global g_state
-	g_state.arguments = parse_arguments()
-
-	if pathlib.Path(g_state.arguments.state_file).exists():
-		load_state()
-	
-	atexit.register(save_state)
-
-	asyncio.create_task(scheduler())
-	for _ in range(g_state.arguments.runners):
-		asyncio.create_task(ping_worker())
-	
-
-def prepare_screen(screen):
-	curses.mousemask(curses.ALL_MOUSE_EVENTS)
-	curses.curs_set(0)
-	screen.clear()
-	screen.nodelay(True)
-	screen.keypad(True)
-	screen.idcok(False)
-	screen.idlok(False)
-
-	if curses.can_change_color():
-		curses.init_color(curses.COLOR_WHITE, 800, 800, 800)
-
 class Property:
 	def __init__(self, item_type, item):
 		self.item_type = item_type
@@ -223,10 +182,22 @@ def build_server_info(server):
 		*mod_list
 	]
 
-async def main(screen: curses.window):
+def prepare_screen(screen: curses.window):
+	curses.resize_term(0, 0)
+	curses.mousemask(curses.ALL_MOUSE_EVENTS)
+	curses.curs_set(0)
+	screen.clear()
+	screen.nodelay(True)
+	screen.keypad(True)
+	screen.idcok(False)
+	screen.idlok(False)
+	
+	if curses.can_change_color():
+		curses.init_color(curses.COLOR_WHITE, 800, 800, 800)
+
+async def interface(screen: curses.window):
 	global g_state
 
-	prepare_state()
 	prepare_screen(screen)
 
 	palette = Widgets.Palette()
@@ -237,15 +208,19 @@ async def main(screen: curses.window):
 	palette.set("ONL", curses.COLOR_WHITE, curses.COLOR_GREEN) # Online
 	palette.set("OFF", curses.COLOR_WHITE, curses.COLOR_RED) # Offline
 	
-	scrolling_frame_states = []
-	scrolling_frame = Widgets.ScrollingFrame(screen.subwin(curses.LINES - 1, curses.COLS - 1, 0, 0))
+	scroll_frame_screen = screen.subwin(curses.LINES - 1, curses.COLS - 1, 0, 0)
+	scroll_frame_states = []
+	scroll_frame = Widgets.ScrollingFrame(scroll_frame_screen)
 	server_view = None
 	start = time.time()
 	tick = 0
 
+	sy = 0
+	sx = 0
+
 	def set_status(string):
-		screen.addstr(curses.LINES - 1, 0, string)
-		screen.chgat(curses.LINES - 1, 0, -1, palette.get("CMD"))
+		screen.addstr(sy - 1, 0, string)
+		screen.chgat(sy - 1, 0, -1, palette.get("CMD"))
 
 	while g_state.running:
 		key = screen.getch()
@@ -257,28 +232,28 @@ async def main(screen: curses.window):
 		if delta > 0:
 			tick += 1
 			start = time.time() - delta
-
-		selection = scrolling_frame.current_item()
+		
+		selection = scroll_frame.current_item()
 		match key:
 			case curses.KEY_UP:
-				scrolling_frame.cursor -= 1
+				scroll_frame.cursor -= 1
 
 			case curses.KEY_DOWN:
-				scrolling_frame.cursor += 1
+				scroll_frame.cursor += 1
 			
 			case curses.KEY_PPAGE:
-				scrolling_frame.cursor -= scrolling_frame.size_y - 1
+				scroll_frame.cursor -= scroll_frame.size_y - 1
 			
 			case curses.KEY_NPAGE:
-				scrolling_frame.cursor += scrolling_frame.size_y - 1
+				scroll_frame.cursor += scroll_frame.size_y - 1
 			
 			case _ if key == ord('V') or key == ord('v'):
 				if server_view:
-					scrolling_frame.set_state(scrolling_frame_states.pop())
+					scroll_frame.set_state(scroll_frame_states.pop())
 					server_view = None
 				elif selection:
-					scrolling_frame_states.append(scrolling_frame.get_state())
-					scrolling_frame.set_position(0, 0)
+					scroll_frame_states.append(scroll_frame.get_state())
+					scroll_frame.set_position(0, 0)
 					server_view = selection.item
 			
 			case _ if key == ord('C') or key == ord('c'):
@@ -288,25 +263,60 @@ async def main(screen: curses.window):
 			case _ if key == ord('Q') or key == ord('q'):
 				g_state.running = False
 
+		# Tasks before draw start
+		[sy, sx] = screen.getmaxyx()
+		scroll_frame_screen.resize(sy - 1, sx - 1)
+		scroll_frame_screen.move(0, 0)
+
 		# Draw start
 		screen.erase()
 		if server_view:
-			scrolling_frame.items = build_server_info(server_view)
+			scroll_frame.items = build_server_info(server_view)
 		else:
 			servers = list(g_state.host_list.server_iterator())
 			servers.sort(key = lambda server: server.active and len(server.players), reverse=True)
 
-			scrolling_frame.items = list(map(lambda srv: Property("SERVER", srv), servers))
+			scroll_frame.items = list(map(lambda srv: Property("SERVER", srv), servers))
 
-		scrolling_frame.update()
-		for _idx, rel, item in scrolling_frame.iterate():
+		scroll_frame.update()
+		for _idx, rel, item in scroll_frame.iterate():
 			item.draw(rel, tick, screen, palette)
 
-			if rel == scrolling_frame.cursor:
+			if rel == scroll_frame.cursor:
 				screen.chgat(rel, 0, -1, palette.get("HOV"))
 
 		set_status("↑/↓ & PAGE-UP/PAGE-DOWN: Move up/down, C: Copy field, V: Toggle server info view, Q: Quit")
 		screen.refresh()
+
+def parse_arguments():
+	parser = argparse.ArgumentParser(description="A simple text-based user interface tool to track specific Minecraft servers")
+
+	parser.add_argument(
+		"--state-file", "-s", help=f"The path in which the state file should be stored (defaults to \"{c_state_file}\").", required=False, type=str,
+		default=c_state_file
+	)
+
+	parser.add_argument(
+		"--runners", "-r", help=f"Task count (defaults to {c_runners}).", required=False, type=int,
+		default=c_runners
+	)
+
+	return parser.parse_args()
+
+async def main(screen):
+	global g_state
+	g_state.arguments = parse_arguments()
+
+	if pathlib.Path(g_state.arguments.state_file).exists():
+		load_state()
+	
+	atexit.register(save_state)
+
+	asyncio.create_task(scheduler())
+	for _ in range(g_state.arguments.runners):
+		asyncio.create_task(ping_worker())
+
+	await interface(screen)
 
 
 if __name__ == "__main__":
