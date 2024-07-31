@@ -148,20 +148,20 @@ class Property:
 	
 	def text(self):
 		item_type = self.item_type
-		source = self.item
+		item = self.item
 
 		match item_type:
 			case "TEXT":
-				return source
+				return item
 			
 			case "PLAYER_LIST":
-				return json.dumps([player.serialize() for player in source.players], indent=3)
+				return json.dumps([player.serialize() for player in item.players], indent=3)
 			
 			case "MOD_LIST":
-				return json.dumps([mod.serialize() for mod in source.mods], indent=3)
+				return json.dumps([mod.serialize() for mod in item.mods], indent=3)
 
 			case _ if item_type in ["SERVER", "PLAYER", "MOD"]:
-				return json.dumps(source.serialize(), indent=3)
+				return json.dumps(item.serialize(), indent=3)
 
 def build_server_info(server):
 	player_list = []
@@ -174,6 +174,7 @@ def build_server_info(server):
 		mod_list.append(Property("MOD", mod))
 
 	return [
+		Property("TEXT", f"Address: {server.host.address}:{server.port}"),
 		Property("TEXT", f"Version: {server.server_version or '?'}"),
 		Property("TEXT", f"Enforces secure chat: {bool_to_word(server.secure_chat)}"),
 		Property("PLAYER_LIST", server),
@@ -285,7 +286,7 @@ async def interface(screen: curses.window):
 			scroll_frame.items = build_server_info(server_view)
 		else:
 			servers = list(g_state.host_list.server_iterator())
-			servers.sort(key = lambda server: server.active and len(server.players), reverse=True)
+			servers.sort(key = lambda server: f"{server.host.address}:{server.port}", reverse=True)
 
 			scroll_frame.items = list(map(lambda srv: Property("SERVER", srv), servers))
 

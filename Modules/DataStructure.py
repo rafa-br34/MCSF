@@ -1,3 +1,4 @@
+import aiohttp.client_exceptions
 import requests
 import aiohttp
 import asyncio
@@ -137,10 +138,11 @@ class Server:
 		self.active_players = obj["online"]
 		self.max_players = obj["max"]
 
-		if "sample" in obj:
-			for player in self.players:
-				player.active = False
+		# "sample" is only returned when there are active players it seems?
+		for player in self.players:
+			player.active = False
 
+		if "sample" in obj:
 			for player_sample in obj["sample"]:
 				player = self.get_or_add_player(player_sample["name"], player_sample["id"])
 				player.parse_player(player_sample)
@@ -211,11 +213,12 @@ class Player:
 		self.last_verified = time.time()
 	
 	async def verify_premium_async(self):
+		exceptions = aiohttp.client_exceptions
 		try:
 			async with aiohttp.ClientSession() as session:
 				self.premium_uuid = (await session.get(f"https://sessionserver.mojang.com/session/minecraft/profile/{self.uuid}")).status == 200
 				self.premium_name = (await session.get(f"https://api.mojang.com/users/profiles/minecraft/{self.name}")).status == 200
-		except OSError:
+		except (OSError, exceptions.ClientError):
 			return
 		
 		self.last_verified = time.time()

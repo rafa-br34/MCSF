@@ -42,7 +42,7 @@ def parse_arguments():
 
 	# Optional Arguments
 	parser.add_argument(
-		"--ports", "-p", help=f"The range of ports to try (\"-r 10000-20000\", \"-r 25565\", \"-r 15-25 30-40 80 8080\") (default {c_port}).", nargs='+', required=False, type=str,
+		"--ports", "-p", help=f"The range of ports to try (\"-p 10000-20000\", \"-p 25565\", \"-p 15-25 30-40 80 8080\") (default {c_port}).", nargs='+', required=False, type=str,
 		default=c_port
 	)
 
