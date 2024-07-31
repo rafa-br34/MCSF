@@ -115,7 +115,7 @@ class Property:
 				host    = spin_textl(address + ':' + str(port),  26, tick) # IPv4 len: 21
 				mods    = spin_textl(f"Mods: {len(item.mods)}",   9,  tick)
 
-				favicon = f"Icon: {zlib.crc32(item.favicon):08X}"
+				favicon = f"Icon: {item.favicon_crc32:08X}"
 				players = f"{item.active_players}/{item.max_players}({len(item.players)})"
 				
 				screen.addstr(
@@ -178,7 +178,7 @@ def build_server_info(server):
 	return [
 		Property("TEXT", f"Address: {server.host.address}:{server.port}"),
 		Property("TEXT", f"Version: {server.server_version or '?'}"),
-		Property("TEXT", f"Favicon: (size: {len(server.favicon)}, crc32: {zlib.crc32(server.favicon):08X})"),
+		Property("TEXT", f"Favicon: (size: {server.favicon_size}, crc32: {server.favicon_crc32:08X})"),
 		Property("TEXT", f"Enforces secure chat: {bool_to_word(server.secure_chat)}"),
 		Property("PLAYER_LIST", server),
 		*player_list,
@@ -289,7 +289,9 @@ async def interface(screen: curses.window):
 			scroll_frame.items = build_server_info(server_view)
 		else:
 			servers = list(g_state.host_list.server_iterator())
+
 			servers.sort(key = lambda server: f"{server.host.address}:{server.port}", reverse=True)
+			#servers.sort(key = lambda server: server.favicon_crc32, reverse=True)
 
 			scroll_frame.items = list(map(lambda srv: Property("SERVER", srv), servers))
 

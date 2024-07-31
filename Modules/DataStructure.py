@@ -3,6 +3,7 @@ import requests
 import aiohttp
 import asyncio
 import pickle
+import zlib
 import time
 
 from datauri import DataURI
@@ -88,7 +89,10 @@ class Host:
 
 class Server:
 	def __init__(self, host, port=None):
+		self.favicon_crc32 = 0
+		self.favicon_size = 0
 		self.favicon_type = None
+		self.favicon_data = None
 		self.favicon = None
 		
 		self.protocol_version = None
@@ -104,6 +108,29 @@ class Server:
 		self.players = list()
 
 		self.active = False
+
+	def get_player(self, name=None, uuid=None):
+		return next((player for player in self.players if player.name == name or player.uuid == uuid), None)
+
+	def get_or_add_player(self, name=None, uuid=None):
+		player = self.get_player(name, uuid)
+
+		if not player:
+			player = Player(self, name, uuid)
+			self.players.append(player)
+
+		return player
+	
+	def remove_player(self, name=None, uuid=None):
+		self.players.remove(self.get_player(name, uuid))
+
+	def update_favicon(self):
+		if self.favicon:
+			uri = DataURI(self.favicon)
+			self.favicon_type = uri.mimetype
+			self.favicon_data = uri.data
+			self.favicon_size = len(uri.data)
+			self.favicon_crc32 = zlib.crc32(uri.data)
 	
 	def parse_status(self, obj):
 		if "version" in obj:
@@ -118,9 +145,8 @@ class Server:
 			self.parse_fml_data(obj["modinfo"])
 		
 		if "favicon" in obj:
-			uri = DataURI(obj["favicon"])
-			self.favicon = uri.data
-			self.favicon_type = uri.mimetype
+			self.favicon = obj["favicon"]
+			self.update_favicon()
 		
 		if "enforcesSecureChat" in obj:
 			self.secure_chat = obj["enforcesSecureChat"]
@@ -160,24 +186,8 @@ class Server:
 				player.update_last_seen()
 				player.active = True
 
-	def get_player(self, name=None, uuid=None):
-		return next((player for player in self.players if player.name == name or player.uuid == uuid), None)
-
-	def get_or_add_player(self, name=None, uuid=None):
-		player = self.get_player(name, uuid)
-
-		if not player:
-			player = Player(self, name, uuid)
-			self.players.append(player)
-
-		return player
-	
-	def remove_player(self, name=None, uuid=None):
-		self.players.remove(self.get_player(name, uuid))
-
 	def serialize(self):
 		return {
-			"favicon_type": self.favicon_type,
 			"favicon": self.favicon,
 			
 			"protocol_version": self.protocol_version,
@@ -195,8 +205,8 @@ class Server:
 		}
 	
 	def deserialize(self, obj):
-		self.favicon_type = obj["favicon_type"]
 		self.favicon = obj["favicon"]
+		self.update_favicon()
 
 		self.protocol_version = obj["protocol_version"]
 		self.server_version = obj["server_version"]
@@ -210,7 +220,7 @@ class Server:
 		self.players = [Player(self).deserialize(player) for player in obj["players"]]
 
 		self.active = obj["active"]
-		
+
 		return self
 
 
