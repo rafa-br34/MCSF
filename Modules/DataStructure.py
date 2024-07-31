@@ -2,9 +2,10 @@ import aiohttp.client_exceptions
 import requests
 import aiohttp
 import asyncio
-import curses
 import pickle
 import time
+
+from datauri import DataURI
 
 
 class HostList:
@@ -87,18 +88,23 @@ class Host:
 
 class Server:
 	def __init__(self, host, port=None):
+		self.favicon_type = None
+		self.favicon = None
+		
+		self.protocol_version = None
+		self.server_version = None
+		self.secure_chat = None
+		self.mods = []
 		self.host = host
 		self.port = port
 		self.tags = set()
-		self.mods = []
-		self.active = False
-		self.players = list()
-		self.max_players = 0
-		self.secure_chat = None
-		self.active_players = 0
-		self.server_version = None
-		self.protocol_version = None
 
+		self.active_players = 0
+		self.max_players = 0
+		self.players = list()
+
+		self.active = False
+	
 	def parse_status(self, obj):
 		if "version" in obj:
 			self.parse_version(obj["version"])
@@ -110,6 +116,11 @@ class Server:
 			self.parse_forge_data(obj["forgeData"])
 		elif "modinfo" in obj:
 			self.parse_fml_data(obj["modinfo"])
+		
+		if "favicon" in obj:
+			uri = DataURI(obj["favicon"])
+			self.favicon = uri.data
+			self.favicon_type = uri.mimetype
 		
 		if "enforcesSecureChat" in obj:
 			self.secure_chat = obj["enforcesSecureChat"]
@@ -166,29 +177,40 @@ class Server:
 
 	def serialize(self):
 		return {
+			"favicon_type": self.favicon_type,
+			"favicon": self.favicon,
+			
 			"protocol_version": self.protocol_version,
 			"server_version": self.server_version,
-			"active_players": self.active_players,
 			"secure_chat": self.secure_chat,
+			"mods": [mod.serialize() for mod in self.mods],
+			"port": self.port,
+			"tags": list(self.tags),
+			
+			"active_players": self.active_players,
 			"max_players": self.max_players,
 			"players": [player.serialize() for player in self.players],
-			"active": self.active,
-			"mods": [mod.serialize() for mod in self.mods],
-			"tags": list(self.tags),
-			"port": self.port
+			
+			"active": self.active
 		}
 	
 	def deserialize(self, obj):
+		self.favicon_type = obj["favicon_type"]
+		self.favicon = obj["favicon"]
+
 		self.protocol_version = obj["protocol_version"]
 		self.server_version = obj["server_version"]
+		self.secure_chat = obj["secure_chat"]
+		self.mods = [Mod().deserialize(mod) for mod in obj["mods"]]
+		self.port = obj["port"]
+		self.tags = obj["tags"]
+
 		self.active_players = obj["active_players"]
 		self.max_players = obj["max_players"]
-		self.secure_chat = obj["secure_chat"]
 		self.players = [Player(self).deserialize(player) for player in obj["players"]]
+
 		self.active = obj["active"]
-		self.mods = [Mod().deserialize(mod) for mod in obj["mods"]]
-		self.tags = obj["tags"]
-		self.port = obj["port"]
+		
 		return self
 
 

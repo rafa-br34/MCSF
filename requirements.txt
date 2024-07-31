@@ -1,4 +1,5 @@
 windows-curses; platform_system == "Windows"
+python-datauri
 pyperclip
 untangle
 icmplib

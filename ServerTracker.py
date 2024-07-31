@@ -7,6 +7,7 @@ import curses
 import arrow
 import json
 import time
+import zlib
 
 from Modules import DataStructure
 from Modules import Protocol
@@ -112,8 +113,9 @@ class Property:
 
 				version = spin_textl(item.server_version or '?', 20, tick)
 				host    = spin_textl(address + ':' + str(port),  26, tick) # IPv4 len: 21
-				mods    = spin_textl(f"{len(item.mods)} Mods",   9,  tick)
+				mods    = spin_textl(f"Mods: {len(item.mods)}",   9,  tick)
 
+				favicon = f"Icon: {zlib.crc32(item.favicon):08X}"
 				players = f"{item.active_players}/{item.max_players}({len(item.players)})"
 				
 				screen.addstr(
@@ -123,7 +125,7 @@ class Property:
 				)
 				screen.addstr(
 					line, 11,
-					f"{host} {version} {mods} {players}"
+					f"{host} {version} {favicon} {mods} {players}"
 				)
 
 			case "PLAYER_LIST":
@@ -176,6 +178,7 @@ def build_server_info(server):
 	return [
 		Property("TEXT", f"Address: {server.host.address}:{server.port}"),
 		Property("TEXT", f"Version: {server.server_version or '?'}"),
+		Property("TEXT", f"Favicon: (size: {len(server.favicon)}, crc32: {zlib.crc32(server.favicon):08X})"),
 		Property("TEXT", f"Enforces secure chat: {bool_to_word(server.secure_chat)}"),
 		Property("PLAYER_LIST", server),
 		*player_list,
