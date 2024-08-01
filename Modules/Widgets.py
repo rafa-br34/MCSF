@@ -83,7 +83,7 @@ class ScrollingFrame:
 
 	def current_item(self):
 		idx = self.scroll + self.cursor
-		if len(self.items) - 1 > idx:
+		if idx < len(self.items):
 			return self.items[idx]
 	
 	def set_position(self, cursor, scroll):

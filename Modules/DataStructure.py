@@ -168,7 +168,8 @@ class Server:
 			self.mods = mod_list
 
 	def parse_version(self, obj):
-		self.server_version = obj["name"]
+		if "name" in obj:
+			self.server_version = obj["name"]
 		self.protocol_version = obj["protocol"]
 	
 	def parse_players(self, obj):

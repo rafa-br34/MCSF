@@ -107,6 +107,9 @@ class Property:
 			case "TEXT":
 				screen.addstr(line, 0, item)
 			
+			case "FIELD":
+				screen.addstr(line, 0, "".join(item))
+			
 			case "SERVER":
 				address = item.host.address
 				port = item.port
@@ -155,6 +158,9 @@ class Property:
 		match item_type:
 			case "TEXT":
 				return item
+
+			case "FIELD":
+				return item[1]
 			
 			case "PLAYER_LIST":
 				return json.dumps([player.serialize() for player in item.players], indent=3)
@@ -176,9 +182,9 @@ def build_server_info(server):
 		mod_list.append(Property("MOD", mod))
 
 	return [
-		Property("TEXT", f"Address: {server.host.address}:{server.port}"),
-		Property("TEXT", f"Version: {server.server_version or '?'}"),
-		Property("TEXT", f"Favicon: (size: {server.favicon_size}, crc32: {server.favicon_crc32:08X})"),
+		Property("FIELD", ("Address: ", f"{server.host.address}:{server.port}")),
+		Property("FIELD", ("Version: ", f"{server.server_version or '?'}")),
+		Property("FIELD", ("Favicon: ", f"(size: {server.favicon_size}, crc32: {server.favicon_crc32:08X})")),
 		Property("TEXT", f"Enforces secure chat: {bool_to_word(server.secure_chat)}"),
 		Property("PLAYER_LIST", server),
 		*player_list,

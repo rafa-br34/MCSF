@@ -183,7 +183,7 @@ async def manual_scan(arguments):
 			while task_queue.full():
 				await asyncio.sleep(0.05)
 			
-			bar.desc = f"{host}:{port} Found: {g_state.host_list.server_count()}"
+			bar.desc = f"{host}:{port} Found {g_state.host_list.server_count()} servers on {len(g_state.host_list)}"
 			bar.n = host_idx * len(port_list) + port_idx + 1
 			bar.refresh()
 
