@@ -11,7 +11,7 @@ import zlib
 
 from Modules import DataStructure
 from Modules import Protocol
-from Modules import Widgets
+from Modules import Elements
 
 
 c_state_file = "save_state.pickle"
@@ -64,7 +64,7 @@ async def ping_worker():
 			server.active_players = 0
 		
 		for player in server.players:
-			if time.time() - player.last_verified > 216000 * 12:
+			if time.time() - player.last_verified > 216000 * 4:
 				await player.verify_premium_async()
 
 
@@ -140,9 +140,14 @@ class Property:
 					item.active and "[ONLINE]" or "[OFFLINE]",
 					item.active and palette.get("ONL") or palette.get("OFF")
 				)
+
+				premium = f"{bool_to_word(item.premium_name)}/{bool_to_word(item.premium_uuid)}".ljust(7)
+				name = spin_textl(item.name, 16, tick)
+				uuid = item.uuid
+
 				screen.addstr(
 					line, 11,
-					f"{item.name} ({item.uuid}) Premium name/uuid: {bool_to_word(item.premium_name)}/{bool_to_word(item.premium_uuid)} Last seen {arrow.get(item.last_seen).humanize()}"
+					f"{name} ({uuid}) Premium name/uuid: {premium} Last seen {arrow.get(item.last_seen).humanize()}"
 				)
 			
 			case "MOD_LIST":
@@ -210,7 +215,7 @@ async def interface(screen: curses.window):
 
 	prepare_screen(screen)
 
-	palette = Widgets.Palette()
+	palette = Elements.Palette()
 
 	palette.set("CMD", curses.COLOR_WHITE, curses.COLOR_CYAN) # Bottom bar
 	palette.set("HOV", None, None, curses.A_BOLD) # Item hovered
@@ -218,9 +223,8 @@ async def interface(screen: curses.window):
 	palette.set("ONL", curses.COLOR_WHITE, curses.COLOR_GREEN) # Online
 	palette.set("OFF", curses.COLOR_WHITE, curses.COLOR_RED) # Offline
 	
-	scroll_frame_screen = screen.subwin(curses.LINES - 1, curses.COLS - 1, 0, 0)
 	scroll_frame_states = []
-	scroll_frame = Widgets.ScrollingFrame(scroll_frame_screen)
+	scroll_frame = Elements.ScrollingFrame(screen)
 	server_view = None
 	start = time.time()
 	tick = 0
@@ -252,10 +256,10 @@ async def interface(screen: curses.window):
 				scroll_frame.cursor += 1
 			
 			case curses.KEY_PPAGE:
-				scroll_frame.cursor -= scroll_frame.size_y - 1
+				scroll_frame.cursor -= scroll_frame.size.y - 1
 			
 			case curses.KEY_NPAGE:
-				scroll_frame.cursor += scroll_frame.size_y - 1
+				scroll_frame.cursor += scroll_frame.size.y - 1
 			
 			case curses.KEY_DC:
 				if selection:
@@ -268,26 +272,26 @@ async def interface(screen: curses.window):
 			case curses.KEY_IC:
 				pass # @todo Insert item
 			
-			case _ if key == ord('V') or key == ord('v'):
+			case _ if key in map(ord, ['V', 'v']):
 				if server_view:
 					scroll_frame.set_state(scroll_frame_states.pop())
 					server_view = None
 				elif selection:
 					scroll_frame_states.append(scroll_frame.get_state())
-					scroll_frame.set_position(0, 0)
+					scroll_frame.set_scroll(0, 0)
 					server_view = selection.item
 			
-			case _ if key == ord('C') or key == ord('c'):
+			case _ if key in map(ord, ['C', 'c']):
 				if selection != None:
 					pyperclip.copy(selection.text())
 			
-			case _ if key == ord('Q') or key == ord('q'):
+			case _ if key in map(ord, ['Q', 'q']):
 				g_state.running = False
 
 		# Tasks before draw start
 		[sy, sx] = screen.getmaxyx()
-		scroll_frame_screen.resize(sy - 1, sx - 1)
-		scroll_frame_screen.move(0, 0)
+		scroll_frame.resize(sx - 1, sy - 1)
+		scroll_frame.move(0, 0)
 
 		# Draw start
 		screen.erase()
@@ -302,6 +306,7 @@ async def interface(screen: curses.window):
 			scroll_frame.items = list(map(lambda srv: Property("SERVER", srv), servers))
 
 		scroll_frame.update()
+		scroll_frame.draw_start()
 		for _idx, rel, item in scroll_frame.iterate():
 			item.draw(rel, tick, screen, palette)
 

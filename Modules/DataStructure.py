@@ -238,8 +238,8 @@ class Player:
 
 	def verify_premium(self):
 		try:
-			self.premium_uuid = requests.get(f"https://sessionserver.mojang.com/session/minecraft/profile/{self.uuid}").status_code
-			self.premium_name = requests.get(f"https://api.mojang.com/users/profiles/minecraft/{self.name}").status_code
+			self.premium_uuid = requests.get(f"https://sessionserver.mojang.com/session/minecraft/profile/{self.uuid}").status_code == 200
+			self.premium_name = requests.get(f"https://api.mojang.com/users/profiles/minecraft/{self.name}").status_code == 200
 		except OSError:
 			return
 		

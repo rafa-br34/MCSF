@@ -34,23 +34,83 @@ class Palette:
 		return self.colors[key].get()
 
 
-class ScrollingFrame:
-	def __init__(self, screen: curses.window):
-		self.screen = screen
+class Vector2:
+	def __init__(self, x=0, y=0):
+		self.x = x
+		self.y = y
+	
+	@property
+	def xx(self):
+		return (self.x, self.x)
+	
+	@property
+	def xy(self):
+		return (self.x, self.y)
+	
+	@xy.setter
+	def xy(self, value):
+		self.x = value[0]
+		self.y = value[1]
+	
+	@property
+	def yy(self):
+		return (self.y, self.y)
+	
+	@property
+	def yx(self):
+		return (self.y, self.x)
+	
+	@yx.setter
+	def yx(self, value):
+		self.y = value[0]
+		self.x = value[1]
+
+	def __eq__(self, value):
+		return self.x == value.x and self.y == value.y
+	
+	def __hash__(self):
+		return hash(self.x + self.y * self.x)
+
+class BaseElement:
+	def __init__(self, parent_screen):
+		self.position = Vector2(0, 0)
+		self.size = Vector2(0, 0)
+
+		self.screen: curses.window = parent_screen.subwin(0, 0)
+
+	def resize(self, x=None, y=None):
+		size = self.size
+		x = x if x != None else size.x
+		y = y if y != None else size.y
+
+		size.xy = (x, y)
+
+	def move(self, x=None, y=None):
+		position = self.position
+		x = x if x != None else position.x
+		y = y if y != None else position.y
+
+		position.xy = (x, y)
+	
+	def draw_start(self):
+		screen = self.screen
+		screen.resize(*self.size.yx)
+		screen.mvwin(*self.position.yx)
+
+
+class ScrollingFrame(BaseElement):
+	def __init__(self, parent_screen: curses.window):
+		super().__init__(parent_screen)
 		self.cursor = 0
 		self.scroll = 0
-		self.size_y = 0
-		self.size_x = 0
 		self.items = []
 	
 	def update(self):
 		cursor = self.cursor
 		scroll = self.scroll
 
-		[sy, sx] = self.screen.getmaxyx()
-
 		item_count = len(self.items)
-		sy = min(item_count, sy)
+		sy = min(item_count, self.size.y)
 
 		nsy = sy - 1
 
@@ -63,15 +123,14 @@ class ScrollingFrame:
 		
 		scroll = min(item_count - 1 - nsy, scroll)
 		scroll = max(0, scroll)
+		cursor = max(0, cursor)
 
 		self.cursor = cursor
 		self.scroll = scroll
-		self.size_y = sy
-		self.size_x = sx
 
 	def iterate(self):
 		scroll = self.scroll
-		sy = self.size_y
+		sy = self.size.y
 
 		for idx, item in enumerate(self.items):
 			if idx < scroll:
@@ -83,10 +142,11 @@ class ScrollingFrame:
 
 	def current_item(self):
 		idx = self.scroll + self.cursor
-		if idx < len(self.items):
+
+		if len(self.items) > idx:
 			return self.items[idx]
 	
-	def set_position(self, cursor, scroll):
+	def set_scroll(self, cursor, scroll):
 		self.cursor = cursor
 		self.scroll = scroll
 
@@ -94,4 +154,4 @@ class ScrollingFrame:
 		return (self.cursor, self.scroll)
 	
 	def set_state(self, state):
-		self.set_position(*state)
+		self.set_scroll(*state)
