@@ -1,5 +1,5 @@
-import aiohttp.client_exceptions
 import requests
+import aiohttp.client_exceptions
 import aiohttp
 import asyncio
 import base64
@@ -10,17 +10,13 @@ import time
 from datauri import DataURI
 
 
-def get_dict(item, done=None):
-	if done and item in done:
-		return
-
-	done = done or []
-	done.append(item)
-
-	if hasattr(item, "__dict__"):
-		return {name: get_dict(value, done) for name, value in item.__dict__.items()}
+def get_dict(item):
+	if hasattr(item, "get_dict"):
+		return {name: get_dict(value) for name, value in item.get_dict().items()}
+	elif hasattr(item, "__dict__"):
+		return {name: get_dict(value) for name, value in item.__dict__.items()}
 	elif isinstance(item, (list, tuple, set)):
-		return [get_dict(value, done) for value in item]
+		return [get_dict(value) for value in item]
 	elif isinstance(item, bytes):
 		return base64.b64encode(item).decode()
 	else:
@@ -190,6 +186,9 @@ class Server:
 				player.update_last_seen()
 				player.active = True
 
+	def get_dict(self):
+		return {key: value for key, value in self.__dict__.items() if key != "host"}
+
 class Player:
 	def __init__(self, server, name=None, uuid=None):
 		self.server = server
@@ -228,6 +227,9 @@ class Player:
 		self.name = obj["name"]
 		self.uuid = obj["id"]
 		return self
+	
+	def get_dict(self):
+		return {key: value for key, value in self.__dict__.items() if key != "server"}
 
 class Mod:
 	def __init__(self, mod_id=None, mod_version=None):
