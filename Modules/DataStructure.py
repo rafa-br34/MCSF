@@ -2,11 +2,29 @@ import aiohttp.client_exceptions
 import requests
 import aiohttp
 import asyncio
+import base64
 import pickle
 import zlib
 import time
 
 from datauri import DataURI
+
+
+def get_dict(item, done=None):
+	if done and item in done:
+		return
+
+	done = done or []
+	done.append(item)
+
+	if hasattr(item, "__dict__"):
+		return {name: get_dict(value, done) for name, value in item.__dict__.items()}
+	elif isinstance(item, (list, tuple, set)):
+		return [get_dict(value, done) for value in item]
+	elif isinstance(item, bytes):
+		return base64.b64encode(item).decode()
+	else:
+		return item
 
 
 class HostList:
@@ -37,23 +55,14 @@ class HostList:
 			server_count += len(host.servers)
 
 		return server_count
-
-	def serialize(self):
-		return {
-			"hosts": [host.serialize() for host in self.hosts]
-		}
-
-	def deserialize(self, obj):
-		self.hosts = [Host().deserialize(host) for host in obj["hosts"]]
-		return self
 	
 	def serialize_file(self, filename):
 		with open(filename, "wb") as file:
-			pickle.dump(self.serialize(), file)
+			pickle.dump(self, file)
 	
 	def deserialize_file(self, filename):
 		with open(filename, "rb") as file:
-			self.deserialize(pickle.load(file))
+			self.hosts = pickle.load(file).hosts
 
 class Host:
 	def __init__(self, address=None):
@@ -75,25 +84,23 @@ class Host:
 	def remove_server(self, port):
 		self.servers.remove(self.get_server(port))
 
-	def serialize(self):
-		return {
-			"address": self.address,
-			"servers": [server.serialize() for server in self.servers]
-		}
-	
-	def deserialize(self, obj):
-		self.address = obj["address"]
-		self.servers = [Server(self).deserialize(server) for server in obj["servers"]]
-		return self
+class Favicon:
+	def __init__(self):
+		self.crc32 = 0
+		self.size = 0
+		self.type = None
+		self.data = None
 
+	def load_multipart(self, multipart):
+		uri = DataURI(multipart)
+		self.crc32 = zlib.crc32(uri.data)
+		self.size = len(uri.data)
+		self.type = uri.mimetype
+		self.data = uri.data
 
 class Server:
 	def __init__(self, host, port=None):
-		self.favicon_crc32 = 0
-		self.favicon_size = 0
-		self.favicon_type = None
-		self.favicon_data = None
-		self.favicon = None
+		self.favicon = Favicon()
 		
 		self.protocol_version = None
 		self.server_version = None
@@ -124,13 +131,8 @@ class Server:
 	def remove_player(self, name=None, uuid=None):
 		self.players.remove(self.get_player(name, uuid))
 
-	def update_favicon(self):
-		if self.favicon:
-			uri = DataURI(self.favicon)
-			self.favicon_type = uri.mimetype
-			self.favicon_data = uri.data
-			self.favicon_size = len(uri.data)
-			self.favicon_crc32 = zlib.crc32(uri.data)
+	def update_favicon(self, favicon):
+		self.favicon.load_multipart(favicon)
 	
 	def parse_status(self, obj):
 		if "version" in obj:
@@ -145,8 +147,7 @@ class Server:
 			self.parse_fml_data(obj["modinfo"])
 		
 		if "favicon" in obj:
-			self.favicon = obj["favicon"]
-			self.update_favicon()
+			self.update_favicon(obj["favicon"])
 		
 		if "enforcesSecureChat" in obj:
 			self.secure_chat = obj["enforcesSecureChat"]
@@ -170,7 +171,9 @@ class Server:
 	def parse_version(self, obj):
 		if "name" in obj:
 			self.server_version = obj["name"]
-		self.protocol_version = obj["protocol"]
+		
+		if "protocol" in obj:
+			self.protocol_version = obj["protocol"]
 	
 	def parse_players(self, obj):
 		self.active_players = obj["online"]
@@ -186,44 +189,6 @@ class Server:
 				player.parse_player(player_sample)
 				player.update_last_seen()
 				player.active = True
-
-	def serialize(self):
-		return {
-			"favicon": self.favicon,
-			
-			"protocol_version": self.protocol_version,
-			"server_version": self.server_version,
-			"secure_chat": self.secure_chat,
-			"mods": [mod.serialize() for mod in self.mods],
-			"port": self.port,
-			"tags": list(self.tags),
-			
-			"active_players": self.active_players,
-			"max_players": self.max_players,
-			"players": [player.serialize() for player in self.players],
-			
-			"active": self.active
-		}
-	
-	def deserialize(self, obj):
-		self.favicon = obj["favicon"]
-		self.update_favicon()
-
-		self.protocol_version = obj["protocol_version"]
-		self.server_version = obj["server_version"]
-		self.secure_chat = obj["secure_chat"]
-		self.mods = [Mod().deserialize(mod) for mod in obj["mods"]]
-		self.port = obj["port"]
-		self.tags = obj["tags"]
-
-		self.active_players = obj["active_players"]
-		self.max_players = obj["max_players"]
-		self.players = [Player(self).deserialize(player) for player in obj["players"]]
-
-		self.active = obj["active"]
-
-		return self
-
 
 class Player:
 	def __init__(self, server, name=None, uuid=None):
@@ -263,27 +228,6 @@ class Player:
 		self.name = obj["name"]
 		self.uuid = obj["id"]
 		return self
-	
-	def serialize(self):
-		return {
-			"name": self.name,
-			"uuid": self.uuid,
-			"active": self.active,
-			"premium_uuid": self.premium_uuid,
-			"premium_name": self.premium_name,
-			"last_seen": self.last_seen,
-			"last_verified": self.last_verified
-		}
-	
-	def deserialize(self, obj):
-		self.last_verified = obj["last_verified"]
-		self.last_seen = obj["last_seen"]
-		self.premium_name = obj["premium_uuid"]
-		self.premium_uuid = obj["premium_uuid"]
-		self.active = obj["active"]
-		self.uuid = obj["uuid"]
-		self.name = obj["name"]
-		return self
 
 class Mod:
 	def __init__(self, mod_id=None, mod_version=None):
@@ -298,15 +242,4 @@ class Mod:
 	def parse_fml(self, obj):
 		self.version = obj["version"]
 		self.id = obj["modid"]
-		return self
-
-	def serialize(self):
-		return {
-			"id": self.id,
-			"version": self.version
-		}
-	
-	def deserialize(self, obj):
-		self.version = obj["version"]
-		self.id = obj["id"]
 		return self

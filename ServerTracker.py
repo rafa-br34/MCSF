@@ -7,7 +7,7 @@ import curses
 import arrow
 import json
 import time
-import zlib
+
 
 from Modules import DataStructure
 from Modules import Protocol
@@ -118,7 +118,7 @@ class Property:
 				host    = spin_textl(address + ':' + str(port),  26, tick) # IPv4 len: 21
 				mods    = spin_textl(f"Mods: {len(item.mods)}",   9,  tick)
 
-				favicon = f"Icon: {item.favicon_crc32:08X}"
+				favicon = f"Icon: {item.favicon.crc32:08X}"
 				players = f"{item.active_players}/{item.max_players}({len(item.players)})"
 				
 				screen.addstr(
@@ -168,13 +168,13 @@ class Property:
 				return item[1]
 			
 			case "PLAYER_LIST":
-				return json.dumps([player.serialize() for player in item.players], indent=3)
+				return json.dumps([DataStructure.get_dict(player) for player in item.players], indent=3)
 			
 			case "MOD_LIST":
-				return json.dumps([mod.serialize() for mod in item.mods], indent=3)
+				return json.dumps([DataStructure.get_dict(mod) for mod in item.mods], indent=3)
 
 			case _ if item_type in ["SERVER", "PLAYER", "MOD"]:
-				return json.dumps(item.serialize(), indent=3)
+				return json.dumps(DataStructure.get_dict(item), indent=3)
 
 def build_server_info(server):
 	player_list = []
@@ -189,7 +189,7 @@ def build_server_info(server):
 	return [
 		Property("FIELD", ("Address: ", f"{server.host.address}:{server.port}")),
 		Property("FIELD", ("Version: ", f"{server.server_version or '?'}")),
-		Property("FIELD", ("Favicon: ", f"(size: {server.favicon_size}, crc32: {server.favicon_crc32:08X})")),
+		Property("FIELD", ("Favicon: ", f"(size: {server.favicon.size}, crc32: {server.favicon.crc32:08X})")),
 		Property("TEXT", f"Enforces secure chat: {bool_to_word(server.secure_chat)}"),
 		Property("PLAYER_LIST", server),
 		*player_list,
@@ -301,7 +301,7 @@ async def interface(screen: curses.window):
 			servers = list(g_state.host_list.server_iterator())
 
 			servers.sort(key = lambda server: f"{server.host.address}:{server.port}", reverse=True)
-			#servers.sort(key = lambda server: server.favicon_crc32, reverse=True)
+			#servers.sort(key = lambda server: server.favicon.crc32, reverse=True)
 
 			scroll_frame.items = list(map(lambda srv: Property("SERVER", srv), servers))
 
