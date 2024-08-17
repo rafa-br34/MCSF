@@ -13,6 +13,7 @@ from Modules import DataStructure
 from Modules import Protocol
 from Modules import Elements
 
+c_premium_check = 216000 * 4
 c_sort_modes = [
 	lambda server: f"{server.host.address}:{server.port}",
 	lambda server: server.server_version,
@@ -69,9 +70,11 @@ async def ping_worker():
 		else:
 			server.active = False
 			server.active_players = 0
+			for player in server.players:
+				player.active = False
 		
 		for player in server.players:
-			if time.time() - player.last_verified > 216000 * 4:
+			if time.time() - player.last_verified > c_premium_check:
 				await player.verify_premium_async()
 
 
