@@ -13,9 +13,16 @@ from Modules import DataStructure
 from Modules import Protocol
 from Modules import Elements
 
-
+c_sort_modes = [
+	lambda server: f"{server.host.address}:{server.port}",
+	lambda server: server.server_version,
+	lambda server: server.favicon.crc32,
+	lambda server: server.active_players,
+	lambda server: len(server.players),
+	lambda server: len(server.mods),
+]
 c_state_file = "save_state.pickle"
-c_runners = 16
+c_runners = 10
 
 class _State:
 	host_list = DataStructure.HostList()
@@ -116,7 +123,7 @@ class Property:
 
 				version = spin_textl(item.server_version or '?', 20, tick)
 				host    = spin_textl(address + ':' + str(port),  26, tick) # IPv4 len: 21
-				mods    = spin_textl(f"Mods: {len(item.mods)}",   9,  tick)
+				mods    = spin_textl(f"Mods: {len(item.mods)}",   9, tick)
 
 				favicon = f"Icon: {item.favicon.crc32:08X}"
 				players = f"{item.active_players}/{item.max_players}({len(item.players)})"
@@ -132,7 +139,7 @@ class Property:
 				)
 
 			case "PLAYER_LIST":
-				screen.addstr(line, 0, f"Players {item.active_players}/{item.max_players} ({len(item.players)} players seen):")
+				screen.addstr(line, 0, f"Players {item.active_players}/{item.max_players} ({len(item.players)} players seen), Total playtime: {item.get_play_time() // 3600}h:")
 			
 			case "PLAYER":
 				screen.addstr(
@@ -141,13 +148,13 @@ class Property:
 					item.active and palette.get("ONL") or palette.get("OFF")
 				)
 
-				premium = f"{bool_to_word(item.premium_name)}/{bool_to_word(item.premium_uuid)}".ljust(7)
+				premium = f"{bool_to_word(item.premium_name)}/{bool_to_word(item.premium_uuid)},".ljust(7)
 				name = spin_textl(item.name, 16, tick)
 				uuid = item.uuid
 
 				screen.addstr(
 					line, 11,
-					f"{name} ({uuid}) Premium name/uuid: {premium} Last seen {arrow.get(item.last_seen).humanize()}"
+					f"{name} ({uuid}) Premium name/uuid: {premium} Last seen {arrow.get(item.last_seen).humanize()}, Played for {item.play_time // 3600} hours"
 				)
 			
 			case "MOD_LIST":
@@ -188,7 +195,7 @@ def build_server_info(server):
 
 	return [
 		Property("FIELD", ("Address: ", f"{server.host.address}:{server.port}")),
-		Property("FIELD", ("Version: ", f"{server.server_version or '?'}")),
+		Property("FIELD", ("Version: ", f"{server.server_version or '?'} (Protocol: {server.protocol_version})")),
 		Property("FIELD", ("Favicon: ", f"(size: {server.favicon.size}, crc32: {server.favicon.crc32:08X})")),
 		Property("TEXT", f"Enforces secure chat: {bool_to_word(server.secure_chat)}"),
 		Property("PLAYER_LIST", server),
@@ -226,6 +233,7 @@ async def interface(screen: curses.window):
 	scroll_frame_states = []
 	scroll_frame = Elements.ScrollingFrame(screen)
 	server_view = None
+	sort_mode = 0
 	start = time.time()
 	tick = 0
 
@@ -271,6 +279,9 @@ async def interface(screen: curses.window):
 			
 			case curses.KEY_IC:
 				pass # @todo Insert item
+
+			case _ if key == ord('\t'):
+				sort_mode = (sort_mode + 1) % len(c_sort_modes)
 			
 			case _ if key in map(ord, ['V', 'v']):
 				if server_view:
@@ -299,9 +310,7 @@ async def interface(screen: curses.window):
 			scroll_frame.items = build_server_info(server_view)
 		else:
 			servers = list(g_state.host_list.server_iterator())
-
-			servers.sort(key = lambda server: f"{server.host.address}:{server.port}", reverse=True)
-			#servers.sort(key = lambda server: server.favicon.crc32, reverse=True)
+			servers.sort(key=c_sort_modes[sort_mode], reverse=True)
 
 			scroll_frame.items = list(map(lambda srv: Property("SERVER", srv), servers))
 
@@ -313,7 +322,7 @@ async def interface(screen: curses.window):
 			if rel == scroll_frame.cursor:
 				screen.chgat(rel, 0, -1, palette.get("HOV"))
 
-		set_status("↑/↓ & PAGE-UP/PAGE-DOWN: Move up/down, C: Copy field, V: Toggle server info view, Q: Quit, DELETE: Delete item, INSERT: Insert item")
+		set_status(spin_text("↑/↓ & PAGE-UP/PAGE-DOWN: Move up/down, C: Copy field, V: Toggle server info view, Q: Quit, DELETE: Delete item, INSERT: Insert item, TAB: Change sort mode", sx - 1, tick))
 		screen.refresh()
 
 def parse_arguments():

@@ -112,6 +112,9 @@ class Server:
 
 		self.active = False
 
+	def get_play_time(self):
+		return sum([player.play_time for player in self.players])
+
 	def get_player(self, name=None, uuid=None):
 		return next((player for player in self.players if player.name == name or player.uuid == uuid), None)
 
@@ -175,7 +178,7 @@ class Server:
 		self.active_players = obj["online"]
 		self.max_players = obj["max"]
 
-		# "sample" is only returned when there are active players it seems?
+		# sample is only set when there are active players it seems?
 		for player in self.players:
 			player.active = False
 
@@ -195,6 +198,7 @@ class Player:
 		self.name = name
 		self.uuid = uuid
 		self.active = False
+		self.play_time = 0
 		self.last_seen = 0
 		self.last_verified = 0
 		self.premium_uuid = None
@@ -221,7 +225,12 @@ class Player:
 		self.last_verified = time.time()
 
 	def update_last_seen(self):
-		self.last_seen = time.time()
+		current_time = time.time()
+
+		if self.active:
+			self.play_time += current_time - self.last_seen
+		
+		self.last_seen = current_time
 
 	def parse_player(self, obj):
 		self.name = obj["name"]
