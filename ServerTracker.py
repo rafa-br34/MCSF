@@ -139,7 +139,7 @@ class Property:
 				)
 
 			case "PLAYER_LIST":
-				screen.addstr(line, 0, f"Players {item.active_players}/{item.max_players} ({len(item.players)} players seen), Total playtime: {item.get_play_time() // 3600}h:")
+				screen.addstr(line, 0, f"Players {item.active_players}/{item.max_players} ({len(item.players)} players seen), Total playtime {item.get_play_time() / 3600:0.2f}h:")
 			
 			case "PLAYER":
 				screen.addstr(
@@ -154,7 +154,7 @@ class Property:
 
 				screen.addstr(
 					line, 11,
-					f"{name} ({uuid}) Premium name/uuid: {premium} Last seen {arrow.get(item.last_seen).humanize()}, Played for {item.play_time // 3600} hours"
+					f"{name} ({uuid}) Premium name/uuid: {premium} Last seen {arrow.get(item.last_seen).humanize()}, Played for {item.play_time / 3600:0.2f}h"
 				)
 			
 			case "MOD_LIST":

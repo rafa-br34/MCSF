@@ -178,16 +178,15 @@ class Server:
 		self.active_players = obj["online"]
 		self.max_players = obj["max"]
 
-		# sample is only set when there are active players it seems?
-		for player in self.players:
-			player.active = False
-
 		if "sample" in obj:
 			for player_sample in obj["sample"]:
 				player = self.get_or_add_player(player_sample["name"], player_sample["id"])
 				player.parse_player(player_sample)
 				player.update_last_seen()
 				player.active = True
+		else: # sample is only set when there are active players it seems?
+			for player in self.players:
+				player.active = False
 
 	def get_dict(self):
 		return {key: value for key, value in self.__dict__.items() if key != "host"}
