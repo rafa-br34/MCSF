@@ -22,6 +22,14 @@ c_sort_modes = [
 	lambda server: len(server.players),
 	lambda server: len(server.mods),
 ]
+c_sort_names = [
+	"Address",
+	"Version",
+	"Favicon",
+	"Active Players",
+	"Players Amount",
+	"Mods Amount"
+]
 c_state_file = "save_state.pickle"
 c_runners = 10
 
@@ -326,7 +334,7 @@ async def interface(screen: curses.window):
 			if rel == scroll_frame.cursor:
 				screen.chgat(rel, 0, -1, palette.get("HOV"))
 
-		set_status(spin_text("↑/↓ & PAGE-UP/PAGE-DOWN: Move up/down, C: Copy field, V: Toggle server info view, Q: Quit, DELETE: Delete item, INSERT: Insert item, TAB: Change sort mode", sx - 1, tick))
+		set_status(spin_text(f"↑/↓ & PAGE-UP/PAGE-DOWN: Move up/down, C: Copy field, V: Toggle server info view, Q: Quit, DELETE: Delete item, INSERT: Insert item, TAB: Change sort mode, Sort Mode: {c_sort_names[sort_mode]", sx - 1, tick))
 		screen.refresh()
 
 def parse_arguments():
