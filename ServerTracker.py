@@ -15,20 +15,12 @@ from Modules import Elements
 
 c_premium_check = 216000 * 4
 c_sort_modes = [
-	lambda server: f"{server.host.address}:{server.port}",
-	lambda server: server.server_version,
-	lambda server: server.favicon.crc32,
-	lambda server: server.active_players,
-	lambda server: len(server.players),
-	lambda server: len(server.mods),
-]
-c_sort_names = [
-	"Address",
-	"Version",
-	"Favicon",
-	"Active Players",
-	"Players Amount",
-	"Mods Amount"
+	("Hostname", lambda server: f"{server.host.address}:{server.port}"),
+	("Version", lambda server: server.server_version),
+	("Favicon", lambda server: server.favicon.crc32),
+	("Players Active", lambda server: server.active_players),
+	("Players Seen", lambda server: len(server.players)),
+	("Mod Count", lambda server: len(server.mods)),
 ]
 c_state_file = "save_state.pickle"
 c_runners = 10
@@ -312,6 +304,7 @@ async def interface(screen: curses.window):
 				g_state.running = False
 
 		# Tasks before draw start
+		[mode_name, mode_condition] = c_sort_modes[sort_mode]
 		[sy, sx] = screen.getmaxyx()
 		scroll_frame.resize(sx - 1, sy - 1)
 		scroll_frame.move(0, 0)
@@ -322,7 +315,7 @@ async def interface(screen: curses.window):
 			scroll_frame.items = build_server_info(server_view)
 		else:
 			servers = list(g_state.host_list.server_iterator())
-			servers.sort(key=c_sort_modes[sort_mode], reverse=True)
+			servers.sort(key=mode_condition, reverse=True)
 
 			scroll_frame.items = list(map(lambda srv: Property("SERVER", srv), servers))
 
@@ -334,7 +327,7 @@ async def interface(screen: curses.window):
 			if rel == scroll_frame.cursor:
 				screen.chgat(rel, 0, -1, palette.get("HOV"))
 
-		set_status(spin_text(f"↑/↓ & PAGE-UP/PAGE-DOWN: Move up/down, C: Copy field, V: Toggle server info view, Q: Quit, DELETE: Delete item, INSERT: Insert item, TAB: Change sort mode, Sort Mode: {c_sort_names[sort_mode]", sx - 1, tick))
+		set_status(spin_text(f"↑/↓ & PAGE-UP/PAGE-DOWN: Move up/down, C: Copy field, V: Toggle server info view, Q: Quit, DELETE: Delete item, INSERT: Insert item, TAB: Change sort mode, Sort Mode: {mode_name}", sx - 1, tick))
 		screen.refresh()
 
 def parse_arguments():
