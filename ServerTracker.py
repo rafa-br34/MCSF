@@ -284,7 +284,8 @@ async def interface(screen: curses.window):
 				pass # @todo Insert item
 
 			case _ if key == ord('\t'):
-				sort_mode = (sort_mode + 1) % len(c_sort_modes)
+				if not server_view:
+					sort_mode = (sort_mode + 1) % len(c_sort_modes)
 			
 			case _ if key in map(ord, ['V', 'v']):
 				if server_view:
