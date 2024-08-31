@@ -23,7 +23,7 @@ c_sort_modes = [
 	("Mod Count", lambda server: len(server.mods)),
 ]
 c_state_file = "save_state.pickle"
-c_runners = 10
+c_runners = 16
 
 class _State:
 	host_list = DataStructure.HostList()

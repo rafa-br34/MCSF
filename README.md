@@ -4,7 +4,11 @@
 
 # MCSF
 
-MCSF (Minecraft Server Finder) is a toolkit containing a few utilities for scanning and tracking Minecraft servers plus the players.
+MCSF (Minecraft Server Finder) is a toolkit containing a few utilities for scanning and tracking Minecraft servers and the players.
+
+> **Warning**
+>
+> The author or any contributors are not responsible for the misuse of this tool. The responsibility for ensuring ethical and legal use of this tool lies entirely with the end user.
 
 ## Table of contents
 
@@ -33,7 +37,7 @@ MCSF (Minecraft Server Finder) is a toolkit containing a few utilities for scann
 
 ### About
 
-The `ServerTracker.py` script tracks activity on various servers simultaneously and displays it in a text-based user interface using `curses`, it also allows the end user to copy data directly thanks to `pyperclip`.  
+The `ServerTracker.py` script tracks activity on various servers simultaneously and displays it in a text-based user interface using `curses` (or `windows-curses`), it also allows the end user to copy fields directly thanks to `pyperclip`.  
 At the moment this script cannot be used to actually edit data, but there are plans to change this in the near future.
 
 ### Arguments
