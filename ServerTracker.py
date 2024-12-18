@@ -7,11 +7,15 @@ import curses
 import arrow
 import json
 import time
-
+import sys
 
 from Modules import DataStructure
 from Modules import Protocol
 from Modules import Elements
+
+# https://github.com/aio-libs/aiodns/issues/86
+if sys.platform == "win32":
+	asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 c_premium_check = 216000 * 4
 c_sort_modes = [
