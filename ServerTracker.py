@@ -17,7 +17,8 @@ from Modules import Elements
 if sys.platform == "win32":
 	asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-c_premium_check = 216000 * 4
+
+c_premium_check = 216000 * 4 # Premium scan validity
 c_sort_modes = [
 	("Hostname", lambda server: f"{server.host.address}:{server.port}"),
 	("Version", lambda server: server.server_version),
@@ -26,6 +27,8 @@ c_sort_modes = [
 	("Players Seen", lambda server: len(server.players)),
 	("Mod Count", lambda server: len(server.mods)),
 ]
+c_wait_scan = 2.5 # Time to wait after all hosts have been probed before enqueueing hosts again.
+c_wait_spin = 0.5 # Time to wait before re-checking if all hosts have been scanned
 c_state_file = "save_state.pickle"
 c_runners = 16
 
@@ -55,11 +58,11 @@ async def scheduler():
 	while g_state.running:
 		if queue.empty():
 			save_state()
-			await asyncio.sleep(2.5)
+			await asyncio.sleep(c_wait_scan)
 			for server in host_list.server_iterator():
 				await queue.put(server)
 
-		await asyncio.sleep(0.5)
+		await asyncio.sleep(c_wait_spin)
 
 async def ping_worker():
 	global g_state
